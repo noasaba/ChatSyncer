@@ -26,15 +26,23 @@ public class LunaChatListener implements Listener {
             return;
         }
 
-        String message = String.format("%s: %s",
-                event.getPlayer().getName(),
-                event.getMessage()
-        );
+        // プレイヤーのメッセージを取得
+        String message = event.getMessage();
+        // config.yml の設定で、LunaChat側のsuffixを除去するかチェック
+        if (plugin.getConfig().getBoolean("lunachat.remove-suffix", false)) {
+            String suffix = plugin.getConfig().getString("lunachat.suffix", "");
+            if (!suffix.isEmpty() && message.endsWith(suffix)) {
+                message = message.substring(0, message.length() - suffix.length()).trim();
+            }
+        }
+
+        // Discordに送信するメッセージの形式 (例: "プレイヤー名: メッセージ")
+        String formatted = String.format("%s: %s", event.getPlayer().getName(), message);
 
         try {
             plugin.getJDA().getTextChannelById(Long.parseLong(channelId))
-                    .sendMessage(message).queue();
-            plugin.getLogger().info("Luna chatメッセージをDiscordに送信: " + message);
+                    .sendMessage(formatted).queue();
+            plugin.getLogger().info("Luna chatメッセージをDiscordに送信: " + formatted);
         } catch (Exception e) {
             plugin.getLogger().warning("Minecraft→Discord送信エラー: " + e.getMessage());
         }

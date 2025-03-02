@@ -3,19 +3,20 @@ discord:
   message-format: "&9[Discord] {user}&f: {message}"
   status:
     type: "PLAYING"  # 選択肢: PLAYING, WATCHING, LISTENING, STREAMING
-    text: "サーバーを監視中"
+    text: "Minecraft"
 
 notifications:
-  startup: "&a✅ サーバーが起動しました"
-  shutdown: "&c⛔ サーバーが停止しました"
-  join: "&a+ {player}が参加しました"
-  quit: "&c- {player}が退出しました"
+  startup: "✅ サーバーが起動しました"
+  shutdown: "⛔ サーバーが停止しました"
+  join: "➡️ {player}が参加しました"
+  quit: "⬅️ {player}が退出しました"
 
 # チャンネルマッピング
+# チャンネルIDの指定欄。[
 channel-mapping:
-  test: "1307767610976243722"
-  notifications: "1307767610976243722"
-  staff: "987654321098765432"
+  test: "0000000000000000"
+  notifications: "0000000000000000"
+  staff: "0000000000000000"
 
 playerlist:
   command: "!p"
