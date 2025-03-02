@@ -38,15 +38,18 @@ public class DiscordListener extends ListenerAdapter {
         if (!event.getMessage().getContentRaw().equalsIgnoreCase(command)) return;
 
         int online = Bukkit.getOnlinePlayers().size();
-        int max = Bukkit.getMaxPlayers();
-        StringBuilder players = new StringBuilder();
-        Bukkit.getOnlinePlayers().forEach(p -> players.append(p.getName()).append("\n"));
-
-        // config.yml に記述された書式そのままを使用（囲みの指定もユーザー側で可能）
-        String response = plugin.getConfig().getString("playerlist.format")
-                .replace("{online}", String.valueOf(online))
-                .replace("{max}", String.valueOf(max))
-                .replace("{players}", players.toString().trim());
+        String response;
+        if (online == 0) {
+            response = plugin.getConfig().getString("playerlist.empty", "サーバーにプレイヤーはいません");
+        } else {
+            int maxPlayers = Bukkit.getMaxPlayers();
+            StringBuilder players = new StringBuilder();
+            Bukkit.getOnlinePlayers().forEach(p -> players.append(p.getName()).append("\n"));
+            response = plugin.getConfig().getString("playerlist.format")
+                    .replace("{online}", String.valueOf(online))
+                    .replace("{max}", String.valueOf(maxPlayers))
+                    .replace("{players}", players.toString().trim());
+        }
 
         event.getChannel().sendMessage(response).queue();
     }

@@ -44,10 +44,24 @@ public class ChatSyncer extends JavaPlugin {
     @Override
     public void onDisable() {
         if (active) {
-            sendNotificationByKey("shutdown");
+            try {
+                sendNotificationByKey("shutdown");
+            } catch (Exception ex) {
+                getLogger().warning("shutdown通知送信中に例外発生: " + ex.getMessage());
+            }
         }
-        shutdownJDA();
+        // JDA の非同期タスクが残らないよう shutdownNow() を呼び出し、少し待機する
+        if (jda != null) {
+            jda.shutdownNow();
+            try {
+                Thread.sleep(2000); // 2秒待機して非同期タスクの終了を待つ
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            jda = null;
+        }
     }
+
 
     // Discordトークンと channel-mapping セクションの存在を確認
     private boolean validateConfig() {
@@ -86,7 +100,7 @@ public class ChatSyncer extends JavaPlugin {
                 activity = Activity.listening(statusText);
                 break;
             case "STREAMING":
-                // STREAMING の場合、URL の指定が必須なので適当な URL を設定してください
+                // STREAMINGの場合、URLの指定が必須なので適当なURLを設定
                 activity = Activity.streaming(statusText, "https://www.twitch.tv/");
                 break;
             default:
@@ -94,7 +108,7 @@ public class ChatSyncer extends JavaPlugin {
                 break;
         }
         jda.getPresence().setActivity(activity);
-        getLogger().info("Discord ステータスを設定しました: " + statusType + " " + statusText);
+        getLogger().info("Discordステータスを設定しました: " + statusType + " " + statusText);
     }
 
     private void registerListeners() {
@@ -128,8 +142,8 @@ public class ChatSyncer extends JavaPlugin {
     }
 
     /**
-     * 既にフォーマット済みのメッセージを、通知用 Discord チャンネルに送信する。
-     * また、Minecraft のチャットにもブロードキャストします。
+     * 既にフォーマット済みのメッセージを、通知用Discordチャンネルに送信する。
+     * また、Minecraftのチャットにもブロードキャストします。
      */
     public void sendNotificationRaw(String message) {
         String formatted = ChatColor.translateAlternateColorCodes('&', message);
@@ -145,9 +159,9 @@ public class ChatSyncer extends JavaPlugin {
             TextChannel channel = jda.getTextChannelById(Long.parseLong(channelId));
             if (channel != null) {
                 channel.sendMessage(ChatColor.stripColor(formatted)).queue();
-                getLogger().info("通知メッセージを Discord に送信しました: " + formatted);
+                getLogger().info("通知メッセージをDiscordに送信しました: " + formatted);
             } else {
-                getLogger().warning("Discord チャンネルが見つかりません。ID: " + channelId);
+                getLogger().warning("Discordチャンネルが見つかりません。ID: " + channelId);
             }
         } catch (Exception e) {
             getLogger().warning("Discordメッセージ送信失敗: " + e.getMessage());
@@ -156,7 +170,7 @@ public class ChatSyncer extends JavaPlugin {
 
     private void shutdownJDA() {
         if (jda != null) {
-            jda.shutdown();
+            jda.shutdownNow();
             jda = null;
         }
     }

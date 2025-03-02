@@ -17,12 +17,12 @@ public class LunaChatListener implements Listener {
 
         // Luna chat のチャンネル名（例: "test", "staff" など）を取得
         String lunaChannel = event.getChannelName();
-        plugin.getLogger().info("LunaChatChannelMessageEvent 受信。チャネル: " + lunaChannel);
+        plugin.getLogger().info("LunaChatChannelMessageEvent受信。チャネル: " + lunaChannel);
 
         // 設定ファイルから該当する Discord チャンネルID を取得
         String channelId = plugin.getConfig().getString("channel-mapping." + lunaChannel);
         if (channelId == null || plugin.getJDA() == null) {
-            plugin.getLogger().warning("Discord チャンネルID が見つかりません。キー: " + lunaChannel);
+            plugin.getLogger().warning("DiscordチャンネルIDが見つかりません。キー: " + lunaChannel);
             return;
         }
 
@@ -34,7 +34,7 @@ public class LunaChatListener implements Listener {
         try {
             plugin.getJDA().getTextChannelById(Long.parseLong(channelId))
                     .sendMessage(message).queue();
-            plugin.getLogger().info("Luna chat メッセージを Discord に送信: " + message);
+            plugin.getLogger().info("Luna chatメッセージをDiscordに送信: " + message);
         } catch (Exception e) {
             plugin.getLogger().warning("Minecraft→Discord送信エラー: " + e.getMessage());
         }

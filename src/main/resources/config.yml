@@ -1,6 +1,9 @@
 discord:
   token: "YOUR_BOT_TOKEN"
   message-format: "&9[Discord] {user}&f: {message}"
+  status:
+    type: "PLAYING"  # 選択肢: PLAYING, WATCHING, LISTENING, STREAMING
+    text: "サーバーを監視中"
 
 notifications:
   startup: "&a✅ サーバーが起動しました"
@@ -16,6 +19,5 @@ channel-mapping:
 
 playerlist:
   command: "!p"
-  format: |
-    &6オンラインプレイヤー数 ({online}/{max}):
-    &7{players}
+  format: "オンラインプレイヤー数 ```{online}/{max}: &7{players}```"
+  empty: "サーバーにプレイヤーはいません"
