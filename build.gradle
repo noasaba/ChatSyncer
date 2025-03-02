@@ -1,0 +1,89 @@
+plugins {
+    id 'java'
+    id 'com.gradleup.shadow' version '9.0.0-beta9' // Shadowプラグイン追加
+}
+
+group = 'com.noasaba'
+version = '1.0-dev'
+
+repositories {
+    mavenCentral()
+    maven { url "https://m2.dv8tion.net/releases" }
+    maven { url "https://repo.papermc.io/repository/maven-public/" }
+    maven { url "https://oss.sonatype.org/content/groups/public/" }
+    maven { url "https://repo.extendedclip.com/content/repositories/placeholderapi/" }
+    maven { url "https://raw.githubusercontent.com/ucchyocean/mvn-repo/master" }
+}
+
+dependencies {
+    // PaperMC API（コンパイル時のみ）
+    compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
+
+    // LunaChat（Bukkit依存除外）
+    compileOnly("com.github.ucchyocean:LunaChat:2.8.9") {
+        exclude group: 'org.bukkit', module: 'bukkit'
+    }
+
+    // JDA（バンドルが必要）
+    implementation("net.dv8tion:JDA:5.3.0")
+}
+
+// 依存関係解決戦略
+configurations.all {
+    resolutionStrategy {
+        dependencySubstitution {
+            substitute module('org.bukkit:bukkit') using module('io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT')
+        }
+        force 'io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT'
+    }
+}
+
+// ShadowJar設定
+shadowJar {
+    archiveFileName = "ChatSyncer-${version}.jar"
+
+    // 重複ファイルの除外設定
+    exclude 'META-INF/LICENSE'
+    exclude 'META-INF/LICENSE.txt'
+    exclude 'META-INF/NOTICE'
+    exclude 'META-INF/NOTICE.txt'
+    exclude 'META-INF/versions/9/module-info.class'
+
+    // サービスファイルのマージ
+    mergeServiceFiles()
+
+    // 重複戦略の設定
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+// デフォルトのjarタスクを無効化
+jar.enabled = false
+// ビルドタスクをshadowJarに依存させる
+build.dependsOn shadowJar
+
+def targetJavaVersion = 21
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    sourceCompatibility = JavaVersion.toVersion(targetJavaVersion)
+    targetCompatibility = JavaVersion.toVersion(targetJavaVersion)
+    if (JavaVersion.current() < JavaVersion.toVersion(targetJavaVersion)) {
+        toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release.set(targetJavaVersion)
+}
+
+processResources {
+    def props = [version: version]
+    inputs.properties props
+    filteringCharset 'UTF-8'
+    filesMatching('plugin.yml') {
+        expand props
+        filter { line -> line.replace('${', '$') }
+    }
+}

@@ -1,0 +1,21 @@
+discord:
+  token: "YOUR_BOT_TOKEN"
+  message-format: "&9[Discord] {user}&f: {message}"
+
+notifications:
+  startup: "&a✅ サーバーが起動しました"
+  shutdown: "&c⛔ サーバーが停止しました"
+  join: "&a+ {player}が参加しました"
+  quit: "&c- {player}が退出しました"
+
+# チャンネルマッピング
+channel-mapping:
+  test: "1307767610976243722"
+  notifications: "1307767610976243722"
+  staff: "987654321098765432"
+
+playerlist:
+  command: "!p"
+  format: |
+    &6オンラインプレイヤー数 ({online}/{max}):
+    &7{players}
