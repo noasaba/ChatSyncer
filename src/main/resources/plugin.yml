@@ -1,12 +1,15 @@
 name: ChatSyncer
-version: ${version}
+version: 1.0-dev
 main: com.noasaba.chatsyncer.ChatSyncer
 api-version: 1.21
+author: com.noasaba
+
 commands:
   chatsyncer:
-    description: プラグイン設定を再読み込み
+    description: プラグイン設定リロードコマンド
     usage: /chatsyncer reload
+
 permissions:
   chatsyncer.reload:
-    description: 設定リロード権限
+    description: ChatSyncer設定リロード権限
     default: op

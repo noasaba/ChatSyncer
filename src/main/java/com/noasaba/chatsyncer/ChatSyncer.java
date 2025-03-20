@@ -4,182 +4,208 @@ import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import org.bukkit.ChatColor;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.time.Duration;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+/**
+ * メインプラグインクラス
+ * - config.yml をロード
+ * - Botのステータス (PLAYING / WATCHING / LISTENING / STREAMING) を設定
+ * - notificationsキーで定義されたDiscordチャンネルIDにサーバー通知を送信
+ * - test, staff などは LunaChatListener / DiscordListener を使って同期
+ */
 public class ChatSyncer extends JavaPlugin {
     private JDA jda;
-    private boolean active = false;
+    private final AtomicBoolean isShuttingDown = new AtomicBoolean(false);
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     @Override
     public void onEnable() {
+        // config.yml がない場合はデフォルト配置
         saveDefaultConfig();
         reloadConfig();
 
+        // Discordトークンなどの設定確認
         if (!validateConfig()) {
-            getLogger().severe("設定が不正なため、プラグインを無効化します。");
+            getLogger().severe("設定が不正なため、ChatSyncerを無効化します。");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
 
         try {
+            // JDA(Bot)初期化
             initializeJDA();
-            // Discord のステータス設定を反映する
-            setDiscordStatus();
+            // イベントリスナー登録
             registerListeners();
-            getCommand("chatsyncer").setExecutor(this);
-            active = true;
-            // onEnable() で一度だけ起動通知を送信
-            sendNotificationByKey("startup");
-            getLogger().info("プラグインが正常に起動しました");
+            // リロード用コマンド設定
+            getCommand("chatsyncer").setExecutor(new ReloadCommand(this));
+
+            // サーバー起動通知
+            // firstjoinなどのキーがあるため、"startup"キーを利用
+            sendNotification("startup", false, null);
+
+            getLogger().info("ChatSyncerプラグインが正常に起動しました。");
         } catch (Exception e) {
-            getLogger().severe("起動失敗: " + e.getMessage());
-            getServer().getPluginManager().disablePlugin(this);
+            getLogger().severe("ChatSyncer起動失敗: " + e.getMessage());
+            safeShutdown();
         }
     }
 
     @Override
     public void onDisable() {
-        if (active) {
-            try {
-                sendNotificationByKey("shutdown");
-            } catch (Exception ex) {
-                getLogger().warning("shutdown通知送信中に例外発生: " + ex.getMessage());
-            }
-        }
-        // JDA の非同期タスクが残らないよう shutdownNow() を呼び出し、少し待機する
-        if (jda != null) {
-            jda.shutdownNow();
-            try {
-                Thread.sleep(2000); // 2秒待機して非同期タスクの終了を待つ
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            jda = null;
-        }
+        isShuttingDown.set(true);
+        // シャットダウン通知を2秒以内にDiscordへ送信
+        CompletableFuture.runAsync(() -> sendNotification("shutdown", false, null))
+                .orTimeout(2, TimeUnit.SECONDS)
+                .exceptionally(ex -> {
+                    getLogger().warning("シャットダウン通知に失敗: " + ex.getMessage());
+                    return null;
+                })
+                .thenRun(this::safeShutdown);
     }
 
-
-    // Discordトークンと channel-mapping セクションの存在を確認
     private boolean validateConfig() {
         String token = getConfig().getString("discord.token");
         if (token == null || token.isEmpty() || token.equals("YOUR_BOT_TOKEN")) {
-            getLogger().severe("Discordトークンが未設定です！");
-            return false;
-        }
-        if (getConfig().getConfigurationSection("channel-mapping") == null ||
-                getConfig().getConfigurationSection("channel-mapping").getKeys(false).isEmpty()) {
-            getLogger().severe("channel-mapping が設定されていません！");
+            getLogger().severe("discord.token が未設定です！");
             return false;
         }
         return true;
     }
 
     private void initializeJDA() throws InterruptedException {
-        jda = JDABuilder.createDefault(getConfig().getString("discord.token"))
+        String token = getConfig().getString("discord.token");
+        jda = JDABuilder.createDefault(token)
                 .enableIntents(GatewayIntent.MESSAGE_CONTENT)
                 .build();
         jda.awaitReady();
-    }
 
-    // Discord のステータス設定を行う
-    private void setDiscordStatus() {
-        String statusType = getConfig().getString("discord.status.type", "PLAYING").toUpperCase();
-        String statusText = getConfig().getString("discord.status.text", "");
-        if (statusText.isEmpty()) return;
-
-        Activity activity;
-        switch (statusType) {
-            case "WATCHING":
-                activity = Activity.watching(statusText);
-                break;
-            case "LISTENING":
-                activity = Activity.listening(statusText);
-                break;
-            case "STREAMING":
-                // STREAMINGの場合、URLの指定が必須なので適当なURLを設定
-                activity = Activity.streaming(statusText, "https://www.twitch.tv/");
-                break;
-            default:
-                activity = Activity.playing(statusText);
-                break;
-        }
+        // Botステータス設定
+        String statusType = getConfig().getString("discord.status.type", "PLAYING");
+        String statusText = getConfig().getString("discord.status.text", "Minecraft");
+        Activity activity = switch (statusType.toUpperCase()) {
+            case "WATCHING" -> Activity.watching(statusText);
+            case "LISTENING" -> Activity.listening(statusText);
+            case "STREAMING" -> Activity.streaming(statusText, "https://www.twitch.tv/");
+            default -> Activity.playing(statusText);
+        };
         jda.getPresence().setActivity(activity);
-        getLogger().info("Discordステータスを設定しました: " + statusType + " " + statusText);
     }
 
     private void registerListeners() {
-        getServer().getPluginManager().registerEvents(new LunaChatListener(this), this);
+        // 入退出 & 初参加の通知
         getServer().getPluginManager().registerEvents(new ServerEventListener(this), this);
+        // LunaChat --> Discord
+        getServer().getPluginManager().registerEvents(new LunaChatListener(this), this);
+        // Discord --> Minecraft
         jda.addEventListener(new DiscordListener(this));
     }
 
-    @Override
-    public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
-        if (!sender.hasPermission("chatsyncer.reload")) {
-            sender.sendMessage(ChatColor.RED + "権限がありません");
-            return true;
+    /**
+     * サーバー停止、リソース解放
+     */
+    private void safeShutdown() {
+        try {
+            if (jda != null) {
+                jda.shutdown();
+                if (!jda.awaitShutdown(Duration.ofSeconds(1))) {
+                    jda.shutdownNow();
+                }
+            }
+            jda = null;
+            executor.shutdown();
+            if (!executor.awaitTermination(1, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            getServer().getScheduler().cancelTasks(this);
         }
-        reloadConfig();
-        sender.sendMessage(ChatColor.GREEN + "設定を再読み込みしました");
-        return true;
     }
 
     /**
-     * notifications セクションのキーからメッセージを取得し、送信する
-     * （例："startup", "shutdown", "join", "quit" など）
+     * 入退出/初参加/サーバー起動/サーバー停止等の通知用メソッド。
+     * @param type config.yml notifications内のキー (join, quit, firstjoin, startup, shutdown)
+     * @param fromMinecraft trueならMinecraftのみ通知(システムタグ付与)、falseならDiscord & Minecraft両方
+     * @param playerName {player}置換に使う（join, quit, firstjoinなど）
      */
-    public void sendNotificationByKey(String key) {
-        String message = getConfig().getString("notifications." + key);
-        if (message == null) {
-            getLogger().warning("通知メッセージが見つかりません: notifications." + key);
-            return;
-        }
-        sendNotificationRaw(message);
-    }
+    public void sendNotification(String type, boolean fromMinecraft, String playerName) {
+        if (isShuttingDown.get()) return;
 
-    /**
-     * 既にフォーマット済みのメッセージを、通知用Discordチャンネルに送信する。
-     * また、Minecraftのチャットにもブロードキャストします。
-     */
-    public void sendNotificationRaw(String message) {
-        String formatted = ChatColor.translateAlternateColorCodes('&', message);
+        String template = getConfig().getString("notifications." + type);
+        if (template == null) return;
+
+        String formatted = template;
+        if (playerName != null) {
+            formatted = formatted.replace("{player}", playerName);
+        }
+        // カラーコード
+        formatted = ChatColor.translateAlternateColorCodes('&', formatted);
+
+        if (fromMinecraft) {
+            // システムタグ付与
+            formatted += " " + getSystemTag();
+        }
+        // Minecraft
         getServer().broadcastMessage(formatted);
 
-        // 通知用のチャンネルは専用キー "notifications" を使用
-        String channelId = getConfig().getString("channel-mapping.notifications");
-        if (channelId == null) {
-            getLogger().warning("通知送信用の 'notifications' チャンネルID が設定されていません。");
-            return;
-        }
-        try {
-            TextChannel channel = jda.getTextChannelById(Long.parseLong(channelId));
-            if (channel != null) {
-                channel.sendMessage(ChatColor.stripColor(formatted)).queue();
-                getLogger().info("通知メッセージをDiscordに送信しました: " + formatted);
-            } else {
-                getLogger().warning("Discordチャンネルが見つかりません。ID: " + channelId);
-            }
-        } catch (Exception e) {
-            getLogger().warning("Discordメッセージ送信失敗: " + e.getMessage());
+        // Discord
+        if (!fromMinecraft && jda != null) {
+            // notificationsキーのDiscordチャンネル
+            String channelId = getConfig().getString("channel-mapping.notifications");
+            if (channelId == null) return;
+
+            final String msgForDiscord = ChatColor.stripColor(formatted);
+            executor.execute(() -> {
+                try {
+                    TextChannel channel = jda.getTextChannelById(Long.parseLong(channelId));
+                    if (channel != null) {
+                        channel.sendMessage(msgForDiscord).queue();
+                    }
+                } catch (Exception e) {
+                    getLogger().warning("Discord通知失敗: " + e.getMessage());
+                }
+            });
         }
     }
 
-    private void shutdownJDA() {
-        if (jda != null) {
-            jda.shutdownNow();
-            jda = null;
-        }
+    /**
+     * LunaChat --> Discord の通常チャット転送用
+     */
+    public void sendDiscordMessage(String channelId, String content) {
+        if (isShuttingDown.get() || jda == null) return;
+        final String msg = ChatColor.stripColor(content);
+        executor.execute(() -> {
+            try {
+                TextChannel channel = jda.getTextChannelById(Long.parseLong(channelId));
+                if (channel != null) {
+                    channel.sendMessage(msg).queue();
+                } else {
+                    getLogger().warning("TextChannelがnull: " + channelId);
+                }
+            } catch (Exception e) {
+                getLogger().warning("Discord送信エラー: " + e.getMessage());
+            }
+        });
+    }
+
+    public String getSystemTag() {
+        return ChatColor.translateAlternateColorCodes('&',
+                getConfig().getString("system-tag", "§d[System]"));
     }
 
     public JDA getJDA() {
         return jda;
     }
 
-    public boolean isActive() {
-        return active;
+    public boolean isShuttingDown() {
+        return isShuttingDown.get();
     }
 }

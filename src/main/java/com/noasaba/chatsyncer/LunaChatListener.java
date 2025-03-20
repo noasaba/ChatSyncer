@@ -4,6 +4,10 @@ import com.github.ucchyocean.lc.event.LunaChatChannelMessageEvent;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 
+/**
+ * LunaChatのメッセージをDiscordへ転送する
+ * notifications という LunaChatチャンネルは想定外
+ */
 public class LunaChatListener implements Listener {
     private final ChatSyncer plugin;
 
@@ -13,22 +17,26 @@ public class LunaChatListener implements Listener {
 
     @EventHandler
     public void onLunaChatMessage(LunaChatChannelMessageEvent event) {
-        if (!plugin.isActive()) return;
+        if (plugin.isShuttingDown()) return;
 
-        // Luna chat のチャンネル名（例: "test", "staff" など）を取得
+        // システムタグ付きは転送しない
+        if (event.getMessage().contains(plugin.getSystemTag())) return;
+
         String lunaChannel = event.getChannelName();
-        plugin.getLogger().info("LunaChatChannelMessageEvent受信。チャネル: " + lunaChannel);
 
-        // 設定ファイルから該当する Discord チャンネルID を取得
+        // config.yml の channel-mapping に "test", "staff" などがあればそれをキーにDiscordチャンネルIDを取得
+        // notifications チャンネルは同期しない
+        if (lunaChannel.equalsIgnoreCase("notifications")) {
+            return;
+        }
         String channelId = plugin.getConfig().getString("channel-mapping." + lunaChannel);
-        if (channelId == null || plugin.getJDA() == null) {
-            plugin.getLogger().warning("DiscordチャンネルIDが見つかりません。キー: " + lunaChannel);
+        if (channelId == null) {
+            plugin.getLogger().warning("DiscordチャンネルIDが見つかりません: " + lunaChannel);
             return;
         }
 
-        // プレイヤーのメッセージを取得
+        // suffix除去
         String message = event.getMessage();
-        // config.yml の設定で、LunaChat側のsuffixを除去するかチェック
         if (plugin.getConfig().getBoolean("lunachat.remove-suffix", false)) {
             String suffix = plugin.getConfig().getString("lunachat.suffix", "");
             if (!suffix.isEmpty() && message.endsWith(suffix)) {
@@ -36,15 +44,8 @@ public class LunaChatListener implements Listener {
             }
         }
 
-        // Discordに送信するメッセージの形式 (例: "プレイヤー名: メッセージ")
-        String formatted = String.format("%s: %s", event.getPlayer().getName(), message);
-
-        try {
-            plugin.getJDA().getTextChannelById(Long.parseLong(channelId))
-                    .sendMessage(formatted).queue();
-            plugin.getLogger().info("Luna chatメッセージをDiscordに送信: " + formatted);
-        } catch (Exception e) {
-            plugin.getLogger().warning("Minecraft→Discord送信エラー: " + e.getMessage());
-        }
+        // プレイヤー名: メッセージ
+        String formatted = event.getPlayer().getName() + ": " + message;
+        plugin.sendDiscordMessage(channelId, formatted);
     }
 }

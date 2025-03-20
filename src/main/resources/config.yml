@@ -1,24 +1,35 @@
 discord:
   token: "YOUR_BOT_TOKEN"
-  message-format: "&9[Discord] {user}&f: {message}"
+
+  # Botステータス設定
   status:
-    type: "PLAYING"  # 選択肢: PLAYING, WATCHING, LISTENING, STREAMING
+    type: "PLAYING"    # PLAYING, WATCHING, LISTENING, STREAMING
     text: "Minecraft"
+
+  # Discord -> Minecraft メッセージの書式
+  message-format: "&9[Discord-{key}] {user}&f: {message}"
 
 notifications:
   startup: "✅ サーバーが起動しました"
   shutdown: "⛔ サーバーが停止しました"
-  join: "➡️ {player}が参加しました"
-  quit: "⬅️ {player}が退出しました"
+  join: "➡️{player}が参加しました"
+  quit: "⬅️{player}が退出しました"
+  firstjoin: "🍾ようこそ、{player}さん！初参加です！"
 
-# チャンネルマッピング
-# チャンネルIDの指定欄。[
 channel-mapping:
-  test: "0000000000000000"
-  notifications: "0000000000000000"
-  staff: "0000000000000000"
+  notifications: "111111111111111111"  # サーバー通知専用
+  test: "222222222222222222"          # LunaChatの「test」チャンネルと紐付け
+  staff: "333333333333333333"         # LunaChatの「staff」チャンネルと紐付け
 
 playerlist:
   command: "!p"
-  format: "オンラインプレイヤー数 ```{online}/{max}: &7{players}```"
+  format: |
+    &6オンラインプレイヤー数 ({online}/{max}):
+    &7{players}
   empty: "サーバーにプレイヤーはいません"
+
+system-tag: "§d[System]"
+
+lunachat:
+  remove-suffix: false
+  suffix: ""

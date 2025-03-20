@@ -1,10 +1,10 @@
 plugins {
     id 'java'
-    id 'com.gradleup.shadow' version '9.0.0-beta9' // Shadowプラグイン追加
+    id 'com.gradleup.shadow' version '9.0.0-beta9'
 }
 
 group = 'com.noasaba'
-version = '1.0-dev'
+version = '1.1-dev'
 
 repositories {
     mavenCentral()
@@ -24,7 +24,7 @@ dependencies {
         exclude group: 'org.bukkit', module: 'bukkit'
     }
 
-    // JDA（バンドルが必要）
+    // JDA（シャドウ込みでバンドルする）
     implementation("net.dv8tion:JDA:5.3.0")
 }
 
@@ -32,9 +32,18 @@ dependencies {
 configurations.all {
     resolutionStrategy {
         dependencySubstitution {
+            // LunaChat が org.bukkit:bukkit を引っ張るのをPaperに置換
             substitute module('org.bukkit:bukkit') using module('io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT')
         }
+        // PaperAPIを最新に固定
         force 'io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT'
+
+        // ★ ASMのバージョンを 9.6 に強制してJava 21のclass file version 65に対応
+        eachDependency { details ->
+            if (details.requested.group == 'org.ow2.asm') {
+                details.useVersion '9.6'
+            }
+        }
     }
 }
 
@@ -61,10 +70,11 @@ jar.enabled = false
 // ビルドタスクをshadowJarに依存させる
 build.dependsOn shadowJar
 
+// ここではJava21バイナリでコンパイル
 def targetJavaVersion = 21
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(targetJavaVersion)
     }
     sourceCompatibility = JavaVersion.toVersion(targetJavaVersion)
     targetCompatibility = JavaVersion.toVersion(targetJavaVersion)
@@ -75,6 +85,7 @@ java {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+    // バイトコードをJava21のclass file version 65で出力
     options.release.set(targetJavaVersion)
 }
 

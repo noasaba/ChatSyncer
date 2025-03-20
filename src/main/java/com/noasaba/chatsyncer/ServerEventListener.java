@@ -5,6 +5,9 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
+/**
+ * 入退出および初参加時の通知
+ */
 public class ServerEventListener implements Listener {
     private final ChatSyncer plugin;
 
@@ -13,18 +16,22 @@ public class ServerEventListener implements Listener {
     }
 
     @EventHandler
-    public void onJoin(PlayerJoinEvent event) {
-        plugin.getLogger().info("PlayerJoinEvent: " + event.getPlayer().getName());
-        String message = plugin.getConfig().getString("notifications.join")
-                .replace("{player}", event.getPlayer().getName());
-        plugin.sendNotificationRaw(message);
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        if (plugin.isShuttingDown()) return;
+
+        // 初参加チェック
+        if (!event.getPlayer().hasPlayedBefore()) {
+            // 初参加 (firstjoin)
+            plugin.sendNotification("firstjoin", false, event.getPlayer().getName());
+        } else {
+            // 通常参加 (join)
+            plugin.sendNotification("join", false, event.getPlayer().getName());
+        }
     }
 
     @EventHandler
-    public void onQuit(PlayerQuitEvent event) {
-        plugin.getLogger().info("PlayerQuitEvent: " + event.getPlayer().getName());
-        String message = plugin.getConfig().getString("notifications.quit")
-                .replace("{player}", event.getPlayer().getName());
-        plugin.sendNotificationRaw(message);
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        if (plugin.isShuttingDown()) return;
+        plugin.sendNotification("quit", false, event.getPlayer().getName());
     }
 }
